@@ -2,9 +2,13 @@ package windsdon.derp.derpycollides;
 
 import java.awt.Color;
 import java.awt.Graphics2D;
+import java.awt.Image;
 import java.awt.geom.Rectangle2D;
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Random;
+import javax.imageio.ImageIO;
 
 /**
  *
@@ -18,9 +22,17 @@ public class DerpyGame implements Runnable {
     private static final int WIDTH = 1280;
     private static final int HEIGHT = 720;
     private static final String TITLE = "Derpy Collisions";
+    private Image icon;
 
     public DerpyGame() {
-        display = new Display(WIDTH, HEIGHT, TITLE);
+        try {
+            icon = ImageIO.read(this.getClass().getClassLoader().getResourceAsStream("res/icon.png"));
+            display = new Display(WIDTH, HEIGHT, TITLE, icon);
+        } catch (IOException ex) {
+            icon = null;
+            display = new Display(WIDTH, HEIGHT, TITLE);
+        }
+        
     }
 
     public void start() {
