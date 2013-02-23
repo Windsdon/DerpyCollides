@@ -13,7 +13,7 @@ import java.util.Random;
 public class DerpyGame implements Runnable {
 
     private Display display;
-    private ArrayList<Box> boxes;
+    private ArrayList<Box> boxes = new ArrayList<>();
     private Color bgColor = new Color(0xccccff);
     private static final int WIDTH = 1280;
     private static final int HEIGHT = 720;
@@ -30,7 +30,7 @@ public class DerpyGame implements Runnable {
     @Override
     public void run() {
         setRunning(display.display());
-        
+        init();
         while (isRunning()) {
             doRunTick();
         }
@@ -58,8 +58,20 @@ public class DerpyGame implements Runnable {
         g.setColor(bgColor);
         g.fillRect(0, 0, display.getScreenSize().width, display.getScreenSize().height);
 
+        for (Box box : boxes) {
+            box.render(g);
+        }
+        
         g.dispose();
         display.render();
+    }
+    
+    private void addBox(Box box){
+        boxes.add(box);
+    }
+
+    private void init() {
+        addBox(new Box(100, 100, 100, 100));
     }
 
     private static class Box {
@@ -85,9 +97,18 @@ public class DerpyGame implements Runnable {
             color = getRandomColor();
             physics = null;
         }
+        
+        public Box(double x, double y, double w, double h){
+            this(new Rectangle2D.Double(x, y, w, h));
+        }
 
         public static Color getRandomColor() {
             return new Color(new Random().nextInt(0xffffff + 1));
+        }
+
+        private void render(Graphics2D g) {
+            g.setColor(color);
+            g.fill(bounds);
         }
     }
 
