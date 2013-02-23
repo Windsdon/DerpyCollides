@@ -5,6 +5,7 @@ import java.awt.Canvas;
 import java.awt.Dimension;
 import java.awt.Graphics2D;
 import java.awt.Image;
+import java.awt.event.MouseListener;
 import java.awt.image.BufferStrategy;
 import java.awt.image.BufferedImage;
 import javax.swing.JFrame;
@@ -44,7 +45,7 @@ public class Display extends Canvas {
         this.icon = icon;
     }
 
-    public boolean display() {
+    public boolean display(MouseListener listener) {
         frame = new JFrame(title);
         if (icon != null) {
             frame.setIconImage(icon);
@@ -56,6 +57,11 @@ public class Display extends Canvas {
         frame.setLocationRelativeTo(null);
         frame.setVisible(true);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        
+        if(listener != null){
+            frame.addMouseListener(listener);
+            addMouseListener(listener);
+        }
 
         return true;
     }
