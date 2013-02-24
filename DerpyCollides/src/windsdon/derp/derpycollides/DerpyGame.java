@@ -3,10 +3,12 @@ package windsdon.derp.derpycollides;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.Image;
+import java.awt.Point;
+import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.awt.geom.Rectangle2D;
-import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Random;
@@ -16,17 +18,29 @@ import javax.imageio.ImageIO;
  *
  * @author Windsdon
  */
-public class DerpyGame implements Runnable, MouseListener {
+public class DerpyGame implements Runnable, MouseListener, KeyListener {
 
     private Display display;
-    private ArrayList<Box> boxes = new ArrayList<>();
+    private final ArrayList<Box> boxes = new ArrayList<>();
     private Color bgColor = new Color(0xccccff);
     private static final int WIDTH = 1280;
     private static final int HEIGHT = 720;
     private static final String TITLE = "Derpy Collisions";
     private Image icon;
     private long lastRenderTickTime;
-    private boolean stopPhysics = true;
+    private boolean stopPhysics = false;
+    private Box floor;
+    private Box theBox;
+    private static final double ACCLERATION_X = 10000;
+    private static final double JUMP_SPEED = -1000;
+    private static final double MAX_X_SPEED = 300;
+    private static final double FRICTION_X = 0.9;
+    private static final double GRAVITY = 2000;
+    private int xAcc = 0;
+    private boolean jumpPress = false;
+    private boolean canJump = false;
+    private Point startingPoint;
+    private Point endPoint;
 
     public DerpyGame() {
         try {
@@ -53,12 +67,12 @@ public class DerpyGame implements Runnable, MouseListener {
     }
 
     private void init() {
-        //addBox(new Box(100, 100, 100, 100));
-        addBox(new Box(new Rectangle2D.Double(100, 300, 100, 100), Color.red, new Physics(500, -1000, 0, 1000, 1000, false)));
-        addBox(new Box(new Rectangle2D.Double(1080, 300, 100, 100), Color.red, new Physics(-500, -1000, 100, 1000, 1000, false)));
-        addBox(new Box(new Rectangle2D.Double(0, 200, 1280, 20), Color.black, new Physics()));
-        addBox(new Box(new Rectangle2D.Double(0, 500, 1280, 20), Color.black, new Physics()));
-        addBox(new Box(new Rectangle2D.Double(630, 0, 20, 720), Color.black, new Physics()));
+        theBox = new Box(new Rectangle2D.Double(100, 600, 100, 100), Color.red, new Physics(500, -1000, 0, GRAVITY, 1000, false));
+        addBox(theBox);
+        floor = new Box(new Rectangle2D.Double(0, 700, 1280, 20), Color.black, new Physics());
+        addBox(floor);
+        addBox(new Box(new Rectangle2D.Double(-20, 0, 20, 720), Color.black, new Physics()));
+        addBox(new Box(new Rectangle2D.Double(1280, 0, 20, 720), Color.black, new Physics()));
         lastRenderTickTime = System.currentTimeMillis();
     }
     private boolean running = false;
@@ -73,9 +87,9 @@ public class DerpyGame implements Runnable, MouseListener {
 
     private void doRunTick() {
         long now = System.currentTimeMillis();
+        doKeyCheck();
         if (!stopPhysics) {
             doPhysics(now - lastRenderTickTime);
-            //doPhysics(1);
         }
         lastRenderTickTime = now;
         doRender();
@@ -94,6 +108,20 @@ public class DerpyGame implements Runnable, MouseListener {
 
                 box.physics.vx += box.physics.ax * delta;
                 box.physics.vy += box.physics.ay * delta;
+
+
+                box.physics.vx *= FRICTION_X;
+                if (Math.abs(box.physics.vx) < FRICTION_X) {
+                    box.physics.vx = 0;
+                }
+
+                if (box == theBox) {
+                    if (box.physics.vx > 0) {
+                        box.physics.vx = Math.min(MAX_X_SPEED, box.physics.vx);
+                    } else if (box.physics.vx < 0) {
+                        box.physics.vx = Math.max(-MAX_X_SPEED, box.physics.vx);
+                    }
+                }
 
                 double dx = box.physics.vx * delta;
                 double dy = box.physics.vy * delta;
@@ -135,6 +163,8 @@ public class DerpyGame implements Runnable, MouseListener {
                         collidesY = true;
                         if (box.physics.vy > 0) {
                             py = box1.bounds.getMinY() - shiftY.getMaxY();
+                            //we can jump!
+                            canJump = true;
                             box.updateBounds(0, dy + py);
                         } else if (box.physics.vy < 0) {
                             py = box1.bounds.getMaxY() - shiftY.getMinY();
@@ -173,27 +203,51 @@ public class DerpyGame implements Runnable, MouseListener {
     }
 
     private void addBox(Box box) {
-        boxes.add(box);
+        synchronized (boxes) {
+            boxes.add(box);
+        }
+    }
+
+    private void createBox(Point startingPoint, Point endPoint) {
+        System.out.println(startingPoint);
+        System.out.println(endPoint);
+        if (startingPoint != null && endPoint != null) {
+            addBox(new Box(new Rectangle2D.Double(
+                    Math.min(startingPoint.getX(), endPoint.getX()),
+                    Math.min(startingPoint.getY(), endPoint.getY()),
+                    Math.abs(startingPoint.getX() - endPoint.getX()),
+                    Math.abs(startingPoint.getY() - endPoint.getY())), Color.black, new Physics()));
+        }
     }
 
     @Override
-    public void mouseClicked(MouseEvent e) {
-        if (stopPhysics) {
-            stopPhysics = false;
-        }else{
-            boxes.clear();
-            stopPhysics = true;
-            init();
+    public void mousePressed(MouseEvent e) {
+        if (e.getButton() == MouseEvent.BUTTON3) {
+            if (stopPhysics) {
+                stopPhysics = false;
+            } else {
+                boxes.clear();
+                stopPhysics = true;
+                init();
+            }
+        } else if (e.getButton() == MouseEvent.BUTTON1) {
+            startingPoint = e.getPoint();
+            System.out.println("Click: " + e.toString());
+        }
+    }
+
+    @Override
+    public void mouseReleased(MouseEvent e) {
+        if (e.getButton() == MouseEvent.BUTTON1) {
+            endPoint = e.getPoint();
+            System.out.println("Release: " + e.toString());
+            createBox(startingPoint, endPoint);
         }
     }
 
     //<editor-fold defaultstate="collapsed" desc="useless MouseListener stuff">
     @Override
-    public void mousePressed(MouseEvent e) {
-    }
-
-    @Override
-    public void mouseReleased(MouseEvent e) {
+    public void mouseClicked(MouseEvent e) {
     }
 
     @Override
@@ -207,6 +261,54 @@ public class DerpyGame implements Runnable, MouseListener {
 
     private void shiftRectangle(Rectangle2D shiftX, double dx, double dy) {
         shiftX.setRect(shiftX.getX() + dx, shiftX.getY() + dy, shiftX.getWidth(), shiftX.getHeight());
+    }
+
+    @Override
+    public void keyTyped(KeyEvent e) {
+    }
+
+    @Override
+    public void keyPressed(KeyEvent e) {
+//        System.out.println(e);
+        switch (e.getKeyChar()) {
+            case 'a':
+                xAcc = -1;
+                break;
+            case 'd':
+                xAcc = 1;
+                break;
+            case 'w':
+                jumpPress = true;
+                break;
+        }
+    }
+
+    @Override
+    public void keyReleased(KeyEvent e) {
+//        System.out.println(e);
+        switch (e.getKeyChar()) {
+            case 'a':
+                if (xAcc == -1) {
+                    xAcc = 0;
+                }
+                break;
+            case 'd':
+                if (xAcc == 1) {
+                    xAcc = 0;
+                }
+                break;
+            case 'w':
+                jumpPress = false;
+                break;
+        }
+    }
+
+    private void doKeyCheck() {
+        theBox.physics.ax = xAcc * ACCLERATION_X;
+        if (canJump && jumpPress) {
+            theBox.physics.vy = JUMP_SPEED;
+            canJump = false;
+        }
     }
 
     private static class Box {

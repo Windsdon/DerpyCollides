@@ -45,7 +45,7 @@ public class Display extends Canvas {
         this.icon = icon;
     }
 
-    public boolean display(MouseListener listener) {
+    public boolean display(DerpyGame listener) {
         frame = new JFrame(title);
         if (icon != null) {
             frame.setIconImage(icon);
@@ -61,6 +61,8 @@ public class Display extends Canvas {
         if(listener != null){
             frame.addMouseListener(listener);
             addMouseListener(listener);
+            frame.addKeyListener(listener);
+            addKeyListener(listener);
         }
 
         return true;
