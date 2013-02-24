@@ -1,6 +1,7 @@
 package windsdon.derp.derpycollides;
 
 import java.awt.Color;
+import java.awt.Font;
 import java.awt.Graphics2D;
 import java.awt.Image;
 import java.awt.Point;
@@ -25,7 +26,7 @@ public class DerpyGame implements Runnable, MouseListener, KeyListener {
     private Color bgColor = new Color(0xccccff);
     private static final int WIDTH = 1280;
     private static final int HEIGHT = 720;
-    private static final String TITLE = "Derpy Collisions";
+    private static final String TITLE = "Collisions";
     private Image icon;
     private long lastRenderTickTime;
     private boolean stopPhysics = false;
@@ -34,13 +35,16 @@ public class DerpyGame implements Runnable, MouseListener, KeyListener {
     private static final double ACCLERATION_X = 10000;
     private static final double JUMP_SPEED = -1000;
     private static final double MAX_X_SPEED = 300;
-    private static final double FRICTION_X = 0.9;
+    private static final double FRICTION_X = 0.99;
     private static final double GRAVITY = 2000;
     private int xAcc = 0;
     private boolean jumpPress = false;
     private boolean canJump = false;
     private Point startingPoint;
     private Point endPoint;
+    private long lastFPStime;
+    private int tempFPS;
+    private int fps;
 
     public DerpyGame() {
         try {
@@ -96,96 +100,98 @@ public class DerpyGame implements Runnable, MouseListener, KeyListener {
     }
 
     private void doPhysics(long deltaMS) {
-        for (Box box : boxes) {
-            //no need to check for NullPointerExcpetion
-            if (box.physics == null || box.physics.fixed) {
-                //fixed or doesn't have physics. Skip.
-                continue;
-            }
-            double cycles = deltaMS / box.physics.factor;
-            while (cycles > 0) {
-                double delta = Math.min(cycles, Physics.PRECISON);
-
-                box.physics.vx += box.physics.ax * delta;
-                box.physics.vy += box.physics.ay * delta;
-
-
-                box.physics.vx *= FRICTION_X;
-                if (Math.abs(box.physics.vx) < FRICTION_X) {
-                    box.physics.vx = 0;
+        synchronized (boxes) {
+            for (Box box : boxes) {
+                //no need to check for NullPointerExcpetion
+                if (box.physics == null || box.physics.fixed) {
+                    //fixed or doesn't have physics. Skip.
+                    continue;
                 }
+                double cycles = deltaMS / box.physics.factor;
+                while (cycles > 0) {
+                    double delta = Math.min(cycles, Physics.PRECISON);
 
-                if (box == theBox) {
-                    if (box.physics.vx > 0) {
-                        box.physics.vx = Math.min(MAX_X_SPEED, box.physics.vx);
-                    } else if (box.physics.vx < 0) {
-                        box.physics.vx = Math.max(-MAX_X_SPEED, box.physics.vx);
+                    box.physics.vx += box.physics.ax * delta;
+                    box.physics.vy += box.physics.ay * delta;
+
+
+                    box.physics.vx *= FRICTION_X;
+                    if (Math.abs(box.physics.vx) < FRICTION_X) {
+                        box.physics.vx = 0;
                     }
-                }
 
-                double dx = box.physics.vx * delta;
-                double dy = box.physics.vy * delta;
-
-                //flags to update the velocity later.
-                boolean collidesX = false;
-                boolean collidesY = false;
-
-                for (Box box1 : boxes) {
-                    if (box1.physics == null || box1 == box) {
-                        continue;
-                    }
-                    double px, py;
-                    //first, verify X
-                    //get the moved collision box
-                    Rectangle2D shiftX = (Rectangle2D) box.bounds.clone(); //clone so we don't modify the original
-                    shiftRectangle(shiftX, dx, 0);
-                    //check if collides
-                    if (box1.bounds.intersects(shiftX)) {
-                        //collides, let's stop it
-                        collidesX = true;
+                    if (box == theBox) {
                         if (box.physics.vx > 0) {
-                            //going right
-                            //set px as the amount to shift so it doesn't collide
-                            px = box1.bounds.getMinX() - shiftX.getMaxX();
-                            box.updateBounds(dx + px, 0);
-                        } else {
-                            //going left
-                            //set px as the amount to shift so it doesn't collide
-                            px = shiftX.getMinX() - box1.bounds.getMaxX();
-                            box.updateBounds(dx - px, 0);
+                            box.physics.vx = Math.min(MAX_X_SPEED, box.physics.vx);
+                        } else if (box.physics.vx < 0) {
+                            box.physics.vx = Math.max(-MAX_X_SPEED, box.physics.vx);
                         }
                     }
 
-                    //now for the Y
-                    Rectangle2D shiftY = (Rectangle2D) box.bounds.clone(); //clone so we don't modify the original
-                    shiftRectangle(shiftY, 0, dy);
-                    if (box1.bounds.intersects(shiftY)) {
-                        collidesY = true;
-                        if (box.physics.vy > 0) {
-                            py = box1.bounds.getMinY() - shiftY.getMaxY();
-                            //we can jump!
-                            canJump = true;
-                            box.updateBounds(0, dy + py);
-                        } else if (box.physics.vy < 0) {
-                            py = box1.bounds.getMaxY() - shiftY.getMinY();
-                            box.updateBounds(0, dy + py);
+                    double dx = box.physics.vx * delta;
+                    double dy = box.physics.vy * delta;
+
+                    //flags to update the velocity later.
+                    boolean collidesX = false;
+                    boolean collidesY = false;
+
+                    for (Box box1 : boxes) {
+                        if (box1.physics == null || box1 == box) {
+                            continue;
+                        }
+                        double px, py;
+                        //first, verify X
+                        //get the moved collision box
+                        Rectangle2D shiftX = (Rectangle2D) box.bounds.clone(); //clone so we don't modify the original
+                        shiftRectangle(shiftX, dx, 0);
+                        //check if collides
+                        if (box1.bounds.intersects(shiftX)) {
+                            //collides, let's stop it
+                            collidesX = true;
+                            if (box.physics.vx > 0) {
+                                //going right
+                                //set px as the amount to shift so it doesn't collide
+                                px = box1.bounds.getMinX() - shiftX.getMaxX();
+                                box.updateBounds(dx + px, 0);
+                            } else {
+                                //going left
+                                //set px as the amount to shift so it doesn't collide
+                                px = shiftX.getMinX() - box1.bounds.getMaxX();
+                                box.updateBounds(dx - px, 0);
+                            }
+                        }
+
+                        //now for the Y
+                        Rectangle2D shiftY = (Rectangle2D) box.bounds.clone(); //clone so we don't modify the original
+                        shiftRectangle(shiftY, 0, dy);
+                        if (box1.bounds.intersects(shiftY)) {
+                            collidesY = true;
+                            if (box.physics.vy > 0) {
+                                py = box1.bounds.getMinY() - shiftY.getMaxY();
+                                //we can jump!
+                                canJump = true;
+                                box.updateBounds(0, dy + py);
+                            } else if (box.physics.vy < 0) {
+                                py = box1.bounds.getMaxY() - shiftY.getMinY();
+                                box.updateBounds(0, dy + py);
+                            }
                         }
                     }
-                }
-                if (collidesX) {
-                    box.physics.vx = 0;
-                } else {
-                    box.updateBounds(dx, 0);
+                    if (collidesX) {
+                        box.physics.vx = 0;
+                    } else {
+                        box.updateBounds(dx, 0);
+                    }
+
+                    if (collidesY) {
+                        box.physics.vy = 0;
+                    } else {
+                        box.updateBounds(0, dy);
+                    }
+                    cycles -= Physics.PRECISON;
                 }
 
-                if (collidesY) {
-                    box.physics.vy = 0;
-                } else {
-                    box.updateBounds(0, dy);
-                }
-                cycles -= Physics.PRECISON;
             }
-
         }
     }
 
@@ -197,6 +203,8 @@ public class DerpyGame implements Runnable, MouseListener, KeyListener {
         for (Box box : boxes) {
             box.render(g);
         }
+
+        fps(g);
 
         g.dispose();
         display.render();
@@ -243,6 +251,18 @@ public class DerpyGame implements Runnable, MouseListener, KeyListener {
             System.out.println("Release: " + e.toString());
             createBox(startingPoint, endPoint);
         }
+    }
+
+    private void fps(Graphics2D g) {
+        tempFPS++;
+        if (System.currentTimeMillis() - lastFPStime >= 1000) {
+            lastFPStime = System.currentTimeMillis();
+            fps = tempFPS;
+            tempFPS = 0;
+        }
+        g.setColor(new Color(0x008800));
+        g.setFont(new Font("Lucida console", Font.BOLD, 12));
+        g.drawString(Integer.toString(fps), 10, 30);
     }
 
     //<editor-fold defaultstate="collapsed" desc="useless MouseListener stuff">
@@ -355,7 +375,7 @@ public class DerpyGame implements Runnable, MouseListener, KeyListener {
 
     private static class Physics {
 
-        public static double PRECISON = 1;
+        public static double PRECISON = 0.001;
         public double vx, vy, ax, ay, factor;
         public boolean fixed;
         public static final double DEFAULT_FACTOR = 1000;
