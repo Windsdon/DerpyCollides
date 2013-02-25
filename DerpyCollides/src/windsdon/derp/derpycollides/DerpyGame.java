@@ -199,11 +199,11 @@ public class DerpyGame implements Runnable, MouseListener, KeyListener {
         Graphics2D g = display.getScreenGraphics();
         g.setColor(bgColor);
         g.fillRect(0, 0, display.getScreenSize().width, display.getScreenSize().height);
-
-        for (Box box : boxes) {
-            box.render(g);
+        synchronized (boxes) {
+            for (Box box : boxes) {
+                box.render(g);
+            }
         }
-
         fps(g);
 
         g.dispose();
@@ -331,7 +331,7 @@ public class DerpyGame implements Runnable, MouseListener, KeyListener {
         }
     }
 
-    private static class Box {
+    public static class Box {
 
         public Rectangle2D bounds;
         public Color color;
